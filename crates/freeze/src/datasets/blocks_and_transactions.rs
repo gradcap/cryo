@@ -140,7 +140,11 @@ async fn get_txs_gas_used(
     for task in tasks {
         match task.await {
             Ok(Ok(Some(value))) => gas_used.push(value.as_u32()),
-            _ => return Err(CollectError::CollectError("gas_used not available from node".into())),
+            Ok(Ok(None)) => {
+                return Err(CollectError::CollectError("gas_used not available from node".into()))
+            }
+            Ok(Err(e)) => return Err(e),
+            Err(e) => return Err(CollectError::CollectError(e.to_string())),
         }
     }
 
