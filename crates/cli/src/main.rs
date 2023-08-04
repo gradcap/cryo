@@ -1,5 +1,7 @@
 //! cryo_cli is a cli for cryo_freeze
 
+#![feature(btree_cursors)]
+
 use clap::Parser;
 
 mod args;

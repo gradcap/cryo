@@ -558,6 +558,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "time 0.1.45",
  "wasm-bindgen",
  "winapi",
@@ -858,8 +859,10 @@ dependencies = [
  "governor",
  "hex",
  "polars",
+ "serde",
  "thousands",
  "tokio",
+ "toml",
 ]
 
 [[package]]

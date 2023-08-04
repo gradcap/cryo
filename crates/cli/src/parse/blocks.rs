@@ -1,8 +1,14 @@
-use std::sync::Arc;
+use std::{
+    ops::Bound,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
+use chrono::NaiveDate;
 use ethers::prelude::*;
 
 use cryo_freeze::{BlockChunk, Chunk, ChunkData, ParseError, Subchunk};
+use serde::{Deserialize, Serialize};
 
 use crate::args::Args;
 
@@ -11,11 +17,21 @@ pub(crate) async fn parse_blocks(
     provider: Arc<Provider<Http>>,
 ) -> Result<Vec<(Chunk, Option<String>)>, ParseError> {
     // parse inputs into BlockChunks
-    let block_chunks = match &args.blocks {
-        Some(inputs) => parse_block_inputs(inputs, &provider).await?,
-        None => return Err(ParseError::ParseError("could not parse block inputs".to_string())),
+    let block_chunks = if let Some(date) = args.date {
+        let dates_map_path = PathBuf::from("./dates_map.toml");
+        let mut dates_map = DateBlocksMap::default();
+        dates_map.load_from(&dates_map_path)?;
+        let bounds = dates_map.calculate_bounds(date, &provider).await.map_err(|e| {
+            ParseError::ParseError(format!("Failed to calculate bounds for date due to {e}"))
+        })?;
+        dates_map.save_to(&dates_map_path)?;
+        bounds.map(|range| vec![range]).unwrap_or_default()
+    } else {
+        match &args.blocks {
+            Some(inputs) => parse_block_inputs(inputs, &provider).await?,
+            None => return Err(ParseError::ParseError("could not parse block inputs".to_string())),
+        }
     };
-
     postprocess_block_chunks(block_chunks, args, provider).await
 }
 
@@ -219,6 +235,126 @@ async fn apply_reorg_buffer(
                 })
                 .collect())
         }
+    }
+}
+
+type BlockRange = (u64, u64);
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct DateBlocksMap {
+    /// Tracks block number ranges (inclusive) by date
+    blocks: std::collections::BTreeMap<NaiveDate, BlockRange>,
+}
+
+impl DateBlocksMap {
+    fn mark_block_date(&mut self, block_num: u64, date: NaiveDate) {
+        let (min, max) = self.blocks.entry(date).or_insert((block_num, block_num));
+        if block_num < *min {
+            *min = block_num;
+        } else if block_num > *max {
+            *max = block_num;
+        }
+    }
+
+    async fn get_and_account_block(
+        &mut self,
+        num: impl Into<BlockNumber>,
+        provider: &Provider<Http>,
+    ) -> Result<Option<Block<TxHash>>, ProviderError> {
+        let block_id = BlockId::Number(num.into());
+        println!("Fetching block {block_id:?}");
+        let block = provider.get_block(block_id).await?;
+        if let Some(block) = &block {
+            if let (Ok(t), Some(block_num)) = (block.time(), block.number) {
+                self.mark_block_date(block_num.as_u64(), t.date_naive())
+            }
+        }
+        Ok(block)
+    }
+
+    async fn calculate_bounds(
+        &mut self,
+        date: NaiveDate,
+        provider: &Provider<Http>,
+    ) -> Result<Option<BlockChunk>, ProviderError> {
+        if self.blocks.is_empty() && self.get_and_account_block(1, provider).await?.is_none() {
+            println!("First block not available");
+            return Ok(None)
+        }
+        if date > *self.blocks.last_key_value().unwrap().0 {
+            let latest_block = provider.get_block_number().await?;
+            self.get_and_account_block(latest_block, provider).await?;
+            if date >= *self.blocks.last_key_value().unwrap().0 {
+                println!("{} may still get new blocks", date);
+                return Ok(None)
+            }
+        }
+        let is_tight = |range: BlockRange| range.0 + 1 >= range.1;
+        let mid_point = |range: BlockRange| (range.0 + range.1) / 2;
+        let first = loop {
+            let start_range = self.current_date_start_block_range(&date);
+            if is_tight(start_range) {
+                break start_range.1
+            }
+            self.get_and_account_block(mid_point(start_range), provider).await?;
+        };
+        let last = loop {
+            let end_range = self.current_date_end_block_range(&date);
+            if is_tight(end_range) {
+                break end_range.0
+            }
+            self.get_and_account_block(mid_point(end_range), provider).await?;
+        };
+        Ok(Some(BlockChunk::Range(first, last)))
+    }
+
+    fn current_date_end_block_range(&self, date: &NaiveDate) -> BlockRange {
+        let nearest = Bound::Excluded(date);
+        let (next_first, _) =
+            self.blocks.lower_bound(nearest).value().unwrap_or(&(u64::MAX, u64::MAX));
+        if let Some((_, cur_last)) = self.blocks.get(date) {
+            (*cur_last, *next_first)
+        } else {
+            let (_, prev_last) = self.blocks.upper_bound(nearest).value().unwrap_or(&(0, 0));
+            (*prev_last, *next_first)
+        }
+    }
+
+    fn current_date_start_block_range(&self, date: &NaiveDate) -> BlockRange {
+        let nearest = Bound::Excluded(date);
+        let (_, prev_last) = self.blocks.upper_bound(nearest).value().unwrap_or(&(0, 0));
+        if let Some((cur_first, _)) = self.blocks.get(date) {
+            (*prev_last, *cur_first)
+        } else {
+            let (next_first, _) =
+                self.blocks.lower_bound(nearest).value().unwrap_or(&(u64::MAX, u64::MAX));
+            (*prev_last, *next_first)
+        }
+    }
+
+    fn serialize(&self) -> String {
+        toml::to_string(&self).unwrap()
+    }
+    fn deserialize(&mut self, str: &str) -> Result<(), toml::de::Error> {
+        *self = toml::from_str(str)?;
+        Ok(())
+    }
+
+    fn load_from(&mut self, path: &Path) -> Result<(), ParseError> {
+        if std::path::Path::exists(path) {
+            let str = std::fs::read_to_string(path).map_err(|e| {
+                ParseError::ParseError(format!("Problem reading dates map due to {e}"))
+            })?;
+            self.deserialize(&str).map_err(|e| {
+                ParseError::ParseError(format!("Unable to deserialize dates map due to {e}"))
+            })
+        } else {
+            Ok(())
+        }
+    }
+    fn save_to(&self, path: &Path) -> Result<(), ParseError> {
+        std::fs::write(path, self.serialize())
+            .map_err(|e| ParseError::ParseError(format!("Problem saving dates map due to {e}")))
     }
 }
 
@@ -448,5 +584,21 @@ mod tests {
             (BlockNumberTest::WithoutMock((r"1k", RangePosition::None, 1000)), true), // k
         ];
         block_number_test_helper(tests).await;
+    }
+
+    #[test]
+    fn test_serde() {
+        let mut map = DateBlocksMap::default();
+        let example_str = r#"
+            [blocks]
+            2020-05-10 = [10, 20]
+            2021-01-01 = [100, 200]
+            2022-12-31 = [9876543210, 9876543212]"#;
+        map.deserialize(example_str).expect("should parse");
+
+        assert_eq!(
+            example_str.split_whitespace().collect::<Vec<_>>(),
+            map.serialize().split_whitespace().collect::<Vec<_>>()
+        );
     }
 }

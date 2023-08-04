@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use clap::Parser;
 use color_print::cstr;
 
@@ -38,6 +39,19 @@ pub struct Args {
     )]
     pub reorg_buffer: u64,
 
+    /// Calculates range of blocks to match their UTC date with specified date.
+    /// To optimize repeated runs the dates->blocks mapping calculation is cached on disk.
+    #[arg(long, value_parser = parse_date, help_heading = "Content Options", verbatim_doc_comment)]
+    pub date: Option<NaiveDate>,
+
+    // #[arg(
+    //     short,
+    //     long,
+    //     allow_hyphen_values(true),
+    //     help_heading = "Content Options",
+    //     help = "Select by data transaction instead of by block,\ncan be a list or a file, see
+    // syntax below", )]
+    // pub txs: Vec<String>,
     /// Columns to include alongside the default output,
     /// use `all` to include all available columns
     #[arg(short, long, value_name="COLS", num_args(0..), verbatim_doc_comment, help_heading="Content Options")]
@@ -221,4 +235,14 @@ fn get_datatype_help() -> &'static str {
 - <white><bold>storage_diffs</bold></white>
 - <white><bold>vm_traces</bold></white>     (alias = <white><bold>opcode_traces</bold></white>)"#
     )
+}
+
+fn parse_date(date: &str) -> chrono::ParseResult<chrono::NaiveDate> {
+    if date == "today" {
+        return Ok(chrono::Utc::now().naive_utc().date())
+    }
+    if date == "yesterday" {
+        return Ok(chrono::Utc::now().naive_utc().date().pred_opt().unwrap())
+    }
+    chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
 }
