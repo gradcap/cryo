@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use clap::Parser;
 use color_print::cstr;
+use cryo_freeze::util;
 
 /// Command line arguments
 #[derive(Parser, Debug)]
@@ -41,7 +42,7 @@ pub struct Args {
 
     /// Calculates range of blocks to match their UTC date with specified date.
     /// To optimize repeated runs the dates->blocks mapping calculation is cached on disk.
-    #[arg(long, value_parser = parse_date, help_heading = "Content Options", verbatim_doc_comment)]
+    #[arg(long, value_parser = util::parse_date, help_heading = "Content Options", verbatim_doc_comment)]
     pub date: Option<NaiveDate>,
 
     // #[arg(
@@ -235,14 +236,4 @@ fn get_datatype_help() -> &'static str {
 - <white><bold>storage_diffs</bold></white>
 - <white><bold>vm_traces</bold></white>     (alias = <white><bold>opcode_traces</bold></white>)"#
     )
-}
-
-fn parse_date(date: &str) -> chrono::ParseResult<chrono::NaiveDate> {
-    if date == "today" {
-        return Ok(chrono::Utc::now().naive_utc().date())
-    }
-    if date == "yesterday" {
-        return Ok(chrono::Utc::now().naive_utc().date().pred_opt().unwrap())
-    }
-    chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
 }
