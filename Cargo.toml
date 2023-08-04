@@ -5,6 +5,7 @@ members = [
     "crates/freeze",
     "crates/python",
 ]
+resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
@@ -15,6 +16,36 @@ repository = "https://github.com/paradigmxyz/cryo"
 exclude = [
     ".github/",
 ]
+
+[workspace.dependencies]
+anstyle = "1.0.1"
+async-channel = "1"
+async-trait = "0.1.68"
+backoff = { version = "0.4", features = ["futures", "tokio"] }
+chrono = { version = "0.4.26", features = ["serde"] }
+clap = { version = "4.3.4", features = ["derive", "color", "unstable-styles"] }
+cloud-storage = "0.11"
+colored = "2.0.0"
+color-print = "0.3.4"
+ethers = "2.0.7"
+eyre = "0.6.8"
+futures = "0.3"
+governor = "0.5.1"
+hex = "0.4.3"
+indexmap = "2.0.0"
+indicatif = "0.17.5"
+polars = "0.30.0"
+prefix-hex = "0.7.0"
+pyo3 = { version = "0.18.0", features = ["extension-module"] }
+pyo3-build-config = "0.18.0"
+pyo3-asyncio = { version = "0.18.0", features = ["tokio-runtime"] }
+pyo3-polars = "0.4.0"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0.40"
+thousands = "0.2.0"
+tokio = "1.29"
+tokio-util = "0.7"
+toml = "0.7"
 
 [profile.dev]
 incremental = true
