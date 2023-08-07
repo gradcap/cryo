@@ -18,7 +18,7 @@ pub(crate) async fn parse_blocks(
 ) -> Result<Vec<(Chunk, Option<String>)>, ParseError> {
     // parse inputs into BlockChunks
     let block_chunks = if let Some(date) = args.date {
-        let dates_map_path = PathBuf::from("./dates_map.toml");
+        let dates_map_path = PathBuf::from("./aux/dates_map.toml");
         let mut dates_map = DateBlocksMap::default();
         dates_map.load_from(&dates_map_path)?;
         let bounds = dates_map.calculate_bounds(date, &provider).await.map_err(|e| {
