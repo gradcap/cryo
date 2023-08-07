@@ -22,6 +22,7 @@ impl Dataset for Transactions {
 
     fn column_types(&self) -> HashMap<&'static str, ColumnType> {
         HashMap::from_iter(vec![
+            ("_stream_type", ColumnType::String),
             ("block_number", ColumnType::Int32),
             ("transaction_index", ColumnType::Int32),
             ("transaction_hash", ColumnType::Binary),

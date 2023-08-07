@@ -48,6 +48,7 @@ async fn cloud_uploader_loop(
 pub async fn upload(
     num_uploaders: usize,
     gcs_prefix: &str,
+    extension: &str,
     dir: &Path,
 ) -> Result<(), cloud_storage::Error> {
     let mut parallel_tasks = vec![];
@@ -59,7 +60,7 @@ pub async fn upload(
             parallel_tasks.push(tokio::spawn(task));
         }
 
-        for file_path in crate::util::list_files(dir, "parquet").await? {
+        for file_path in crate::util::list_files(dir, extension).await? {
             if tx.send(file_path).await.is_err() {
                 // Uploader tasks closed
                 break

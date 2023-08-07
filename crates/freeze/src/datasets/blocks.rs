@@ -28,6 +28,7 @@ impl Dataset for Blocks {
 
     fn column_types(&self) -> HashMap<&'static str, ColumnType> {
         HashMap::from_iter(vec![
+            ("_stream_type", ColumnType::String),
             ("hash", ColumnType::Binary),
             ("parent_hash", ColumnType::Binary),
             ("author", ColumnType::Binary),
@@ -291,6 +292,7 @@ impl BlockColumns {
         n_rows: u64,
     ) -> Result<DataFrame, CollectError> {
         let mut cols = Vec::new();
+        with_series!(cols, "_stream_type", &["block"].repeat(self.hash.len()), schema);
         with_series_binary!(cols, "hash", self.hash, schema);
         with_series_binary!(cols, "parent_hash", self.parent_hash, schema);
         with_series_binary!(cols, "author", self.author, schema);
@@ -358,6 +360,7 @@ impl TransactionColumns {
         n_rows: usize,
     ) -> Result<DataFrame, CollectError> {
         let mut cols = Vec::new();
+        with_series!(cols, "_stream_type", &["tx"].repeat(self.block_number.len()), schema);
         with_series!(cols, "block_number", self.block_number, schema);
         with_series!(cols, "transaction_index", self.transaction_index, schema);
         with_series_binary!(cols, "transaction_hash", self.transaction_hash, schema);

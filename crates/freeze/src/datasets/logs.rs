@@ -25,6 +25,7 @@ impl Dataset for Logs {
 
     fn column_types(&self) -> HashMap<&'static str, ColumnType> {
         HashMap::from_iter(vec![
+            ("_stream_type", ColumnType::String),
             ("block_number", ColumnType::UInt32),
             ("transaction_index", ColumnType::UInt32),
             ("log_index", ColumnType::UInt32),
@@ -269,6 +270,7 @@ async fn logs_to_df(
     }
 
     let mut cols = Vec::new();
+    with_series!(cols, "_stream_type", &["log"].repeat(block_number.len()), schema);
     with_series!(cols, "block_number", block_number, schema);
     with_series!(cols, "transaction_index", transaction_index, schema);
     with_series!(cols, "log_index", log_index, schema);
