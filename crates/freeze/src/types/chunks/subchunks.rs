@@ -11,6 +11,9 @@ pub trait Subchunk {
 
 impl Subchunk for BlockChunk {
     fn subchunk_by_size(&self, chunk_size: &u64) -> Vec<BlockChunk> {
+        if self.size() <= *chunk_size {
+            return vec![self.clone()]
+        }
         match &self {
             Self::Numbers(numbers) => numbers
                 .chunks(*chunk_size as usize)
