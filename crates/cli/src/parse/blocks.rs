@@ -298,14 +298,14 @@ impl DateBlocksMap {
             }
             self.get_and_account_block(mid_point(start_range), provider).await?;
         };
-        let last = loop {
+        let end = loop {
             let end_range = self.current_date_end_block_range(&date);
             if is_tight(end_range) {
-                break end_range.0
+                break end_range.1
             }
             self.get_and_account_block(mid_point(end_range), provider).await?;
         };
-        Ok(Some(BlockChunk::Range(first, last)))
+        Ok(Some(BlockChunk::RangeForDate(first, end, date)))
     }
 
     fn current_date_end_block_range(&self, date: &NaiveDate) -> BlockRange {

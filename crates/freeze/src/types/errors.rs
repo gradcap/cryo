@@ -25,6 +25,10 @@ pub enum FreezeError {
     /// Parse error
     #[error("Parsing error")]
     ParseError(#[from] ParseError),
+
+    /// Upload error due to cloud storage error
+    #[error("Upload to GCS error: {0}")]
+    UploadError(#[from] cloud_storage::Error),
 }
 
 /// Error related to data collection

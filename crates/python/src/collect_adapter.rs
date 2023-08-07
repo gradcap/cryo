@@ -107,6 +107,7 @@ pub fn _collect(
         overwrite,
         csv,
         json,
+        upload_gcs_prefix: None,
         row_group_size,
         n_row_groups,
         no_stats,

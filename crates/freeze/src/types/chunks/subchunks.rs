@@ -12,14 +12,20 @@ pub trait Subchunk {
 impl Subchunk for BlockChunk {
     fn subchunk_by_size(&self, chunk_size: &u64) -> Vec<BlockChunk> {
         match &self {
-            BlockChunk::Numbers(numbers) => numbers
+            Self::Numbers(numbers) => numbers
                 .chunks(*chunk_size as usize)
-                .map(|chunk| BlockChunk::Numbers(chunk.to_vec()))
+                .map(|chunk| Self::Numbers(chunk.to_vec()))
                 .collect(),
-            BlockChunk::Range(start_block, end_block) => {
+            Self::Range(start_block, end_block) => {
                 range_to_chunks(start_block, end_block, chunk_size)
                     .iter()
-                    .map(|(start, end)| BlockChunk::Range(*start, *end))
+                    .map(|(start, end)| Self::Range(*start, *end))
+                    .collect()
+            }
+            Self::RangeForDate(start_block, end_block, date) => {
+                range_to_chunks(start_block, end_block, chunk_size)
+                    .iter()
+                    .map(|(start, end)| Self::RangeForDate(*start, *end, *date))
                     .collect()
             }
         }

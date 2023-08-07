@@ -5,11 +5,11 @@ use cloud_storage::{self as cs, Client};
 use futures::TryFutureExt;
 use tokio::fs::File;
 
-const BLOB_PREFIX: &str = "ethereum/";
 const BLOB_MIME: &str = "application/octet-stream";
 
 async fn cloud_uploader_loop(
     bucket: String,
+    prefix: String,
     inputs_rx: Receiver<PathBuf>,
 ) -> Result<(), cs::Error> {
     let client = Client::default();
@@ -19,7 +19,7 @@ async fn cloud_uploader_loop(
 
         let basename = path.file_name().unwrap().to_str().unwrap();
         let parts: Vec<_> = basename.split("__").collect();
-        let blob_name = format!("{}{}", BLOB_PREFIX, parts.join("/"));
+        let blob_name = format!("{}{}", prefix, parts.join("/"));
 
         println!("Uploading {:?} as {}, size={}", path, blob_name, meta.len());
         backoff::future::retry_notify(
@@ -44,16 +44,18 @@ async fn cloud_uploader_loop(
     Ok(())
 }
 
+/// Uploads contents of `dir` to a given GCS bucket/prefix specified in `gcs_prefix` using `num_uploaders` tasks.
 pub async fn upload(
     num_uploaders: usize,
-    bucket: &str,
+    gcs_prefix: &str,
     dir: &Path,
 ) -> Result<(), cloud_storage::Error> {
     let mut parallel_tasks = vec![];
     {
         let (tx, rx) = async_channel::bounded(num_uploaders + 1);
+        let (bucket, gcs_prefix) = gcs_prefix.split_once('/').unwrap();
         for _i in 0..num_uploaders {
-            let task = cloud_uploader_loop(bucket.to_owned(), rx.clone());
+            let task = cloud_uploader_loop(bucket.into(), gcs_prefix.into(), rx.clone());
             parallel_tasks.push(tokio::spawn(task));
         }
 

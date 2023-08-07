@@ -17,8 +17,14 @@ pub trait ChunkData: Sized {
     /// get maximum item in chunk
     fn max_value(&self) -> Option<Self::Inner>;
 
+    /// get date that data in this chunk is contained in
+    fn date(&self) -> Option<&chrono::NaiveDate>;
+
     /// convert chunk to string representation
     fn stub(&self) -> Result<String, ChunkError> {
+        if let Some(date) = self.date() {
+            return Ok(date.format("%Y-%m-%d__data").to_string());
+        }
         match (self.min_value(), self.max_value()) {
             (Some(min), Some(max)) => {
                 Ok(format!("{}_to_{}", Self::format_item(min), Self::format_item(max),))
@@ -44,10 +50,12 @@ pub trait ChunkData: Sized {
             None => vec![network_name, name.to_string(), stub],
         };
         let filename = format!("{}.{}", pieces.join("__"), file_output.format.as_str());
-        match file_output.output_dir.as_str() {
-            "." => Ok(filename),
-            output_dir => Ok(output_dir.to_string() + "/" + filename.as_str()),
-        }
+        file_output
+            .output_dir
+            .join(filename)
+            .to_str()
+            .map(|x| x.to_string())
+            .ok_or(FileError::NoFilePathError("output dir invalid".into()))
     }
 }
 
@@ -60,6 +68,10 @@ impl<T: ChunkData> ChunkData for Vec<T> {
 
     fn size(&self) -> u64 {
         self.iter().map(|x| x.size()).sum()
+    }
+
+    fn date(&self) -> Option<&chrono::NaiveDate> {
+        self.iter().filter_map(|x| x.date()).next()
     }
 
     fn min_value(&self) -> Option<Self::Inner> {

@@ -43,7 +43,7 @@ pub(crate) fn print_cryo_summary(query: &MultiQuery, source: &Source, sink: &Fil
         print_bullet("inner request size", source.inner_request_size.to_string());
     };
     print_bullet("output format", sink.format.as_str());
-    print_bullet("output dir", &sink.output_dir);
+    print_bullet("output dir", sink.output_dir.to_string_lossy());
     print_schemas(&query.schemas);
 }
 

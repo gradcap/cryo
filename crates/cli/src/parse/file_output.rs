@@ -11,9 +11,7 @@ pub(crate) fn parse_file_output(args: &Args, source: &Source) -> Result<FileOutp
     let output_dir = std::fs::canonicalize(args.output_dir.clone())
         .map_err(|_e| {
             ParseError::ParseError("Failed to canonicalize output directory".to_string())
-        })?
-        .to_string_lossy()
-        .into_owned();
+        })?;
     match fs::create_dir_all(&output_dir) {
         Ok(_) => {}
         Err(e) => return Err(ParseError::ParseError(format!("Error creating directory: {}", e))),
@@ -31,6 +29,7 @@ pub(crate) fn parse_file_output(args: &Args, source: &Source) -> Result<FileOutp
 
     let format = parse_output_format(args)?;
     let file_prefix = parse_network_name(args, source.chain_id);
+    let upload_gcs_prefix = args.upload_gcs_prefix.clone();
 
     let output = FileOutput {
         output_dir,
@@ -41,6 +40,7 @@ pub(crate) fn parse_file_output(args: &Args, source: &Source) -> Result<FileOutp
         suffix: file_suffix.clone(),
         parquet_compression,
         row_group_size,
+        upload_gcs_prefix,
     };
 
     Ok(output)

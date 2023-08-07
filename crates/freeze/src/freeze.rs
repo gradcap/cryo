@@ -62,6 +62,11 @@ pub async fn freeze(
     }
     let chunk_summaries: Vec<FreezeChunkSummary> =
         join_all(tasks).await.into_iter().filter_map(Result::ok).collect();
+
+    if let Some(prefix) = &sink.upload_gcs_prefix {
+        crate::upload::upload(10, prefix, &sink.output_dir).await?;
+    }
+
     Ok(chunk_summaries.aggregate())
 }
 
