@@ -125,7 +125,8 @@ async fn freeze_datatype_chunk(
     };
 
     // write data
-    if let Err(_e) = dataframes::df_to_file(&mut df, &path, &sink) {
+    if let Err(e) = dataframes::df_to_file(&mut df, &path, &sink) {
+        println!("failed to write chunk: {:?}", e);
         return FreezeChunkSummary::error(paths)
     }
 

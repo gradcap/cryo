@@ -22,12 +22,8 @@ impl Subchunk for BlockChunk {
                     .map(|(start, end)| Self::Range(*start, *end))
                     .collect()
             }
-            Self::RangeForDate(start_block, end_block, date) => {
-                range_to_chunks(start_block, end_block, chunk_size)
-                    .iter()
-                    .map(|(start, end)| Self::RangeForDate(*start, *end, *date))
-                    .collect()
-            }
+            // Date range doesn't support subchunking, since we want all data in single file
+            Self::RangeForDate(_, _, _) => vec![self.clone()]
         }
     }
 
