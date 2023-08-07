@@ -7,34 +7,35 @@ use cryo_freeze::{FreezeError, FreezeSummary};
 pub async fn run(args: args::Args) -> Result<Option<FreezeSummary>, FreezeError> {
     // parse inputs
     let t_start = SystemTime::now();
-    let (query, source, sink) = match parse::parse_opts(&args).await {
+    let (dry, no_verbose) = (args.dry, args.no_verbose);
+    let (query, source, sink) = match parse::parse_opts(args).await {
         Ok(opts) => opts,
         Err(e) => return Err(e.into()),
     };
     let t_parse_done = SystemTime::now();
 
     // print summary
-    if !args.no_verbose {
+    if !no_verbose {
         summaries::print_cryo_summary(&query, &source, &sink);
     }
 
     // check dry run
-    if args.dry {
-        if !args.no_verbose {
+    if dry {
+        if !no_verbose {
             println!("\n\n[dry run, exiting]");
         }
         return Ok(None)
     };
 
     // collect data
-    if !args.no_verbose {
+    if !no_verbose {
         summaries::print_header("\n\ncollecting data");
     }
     match cryo_freeze::freeze(&query, &source, &sink).await {
         Ok(freeze_summary) => {
             // print summary
             let t_data_done = SystemTime::now();
-            if !args.no_verbose {
+            if !no_verbose {
                 println!("...done\n\n");
                 summaries::print_cryo_conclusion(
                     t_start,

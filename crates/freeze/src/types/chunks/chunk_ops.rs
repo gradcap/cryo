@@ -71,7 +71,11 @@ impl<T: ChunkData> ChunkData for Vec<T> {
     }
 
     fn date(&self) -> Option<&chrono::NaiveDate> {
-        self.iter().filter_map(|x| x.date()).next()
+        if self.len() == 1 {
+            self[0].date()
+        } else {
+            None
+        }
     }
 
     fn min_value(&self) -> Option<Self::Inner> {

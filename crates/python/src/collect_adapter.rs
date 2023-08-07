@@ -131,7 +131,7 @@ pub fn _collect(
 }
 
 async fn run_collect(args: Args) -> PolarsResult<DataFrame> {
-    let (query, source, _sink) = match parse_opts(&args).await {
+    let (query, source, _sink) = match parse_opts(args).await {
         Ok(opts) => opts,
         Err(_e) => panic!(),
     };

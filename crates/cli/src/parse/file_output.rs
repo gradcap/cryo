@@ -8,10 +8,9 @@ use crate::args::Args;
 
 pub(crate) fn parse_file_output(args: &Args, source: &Source) -> Result<FileOutput, ParseError> {
     // process output directory
-    let output_dir = std::fs::canonicalize(args.output_dir.clone())
-        .map_err(|_e| {
-            ParseError::ParseError("Failed to canonicalize output directory".to_string())
-        })?;
+    let output_dir = std::fs::canonicalize(args.output_dir.clone()).map_err(|_e| {
+        ParseError::ParseError("Failed to canonicalize output directory".to_string())
+    })?;
     match fs::create_dir_all(&output_dir) {
         Ok(_) => {}
         Err(e) => return Err(ParseError::ParseError(format!("Error creating directory: {}", e))),
@@ -24,7 +23,7 @@ pub(crate) fn parse_file_output(args: &Args, source: &Source) -> Result<FileOutp
     let row_group_size = parse_row_group_size(
         args.row_group_size,
         args.n_row_groups,
-        Some(args.chunk_size as usize),
+        if args.chunk_size < u64::MAX { Some(args.chunk_size as usize) } else { None },
     );
 
     let format = parse_output_format(args)?;

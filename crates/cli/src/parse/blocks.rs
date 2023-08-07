@@ -399,7 +399,8 @@ mod tests {
                 };
                 return block_numbers == expected_block_numbers
             }
-            BlockChunk::Range(expected_range_start, expected_range_end) => {
+            BlockChunk::Range(expected_range_start, expected_range_end) |
+            BlockChunk::RangeForDate(expected_range_start, expected_range_end, _) => {
                 let block_chunks = parse_block_token(token, true, &provider).await.unwrap();
                 assert!(matches!(block_chunks, BlockChunk::Range { .. }));
                 let BlockChunk::Range(range_start, range_end) = block_chunks else {
@@ -452,7 +453,8 @@ mod tests {
                         return false
                     }
                 }
-                BlockChunk::Range(expected_range_start, expected_range_end) => {
+                BlockChunk::Range(expected_range_start, expected_range_end) |
+                BlockChunk::RangeForDate(expected_range_start, expected_range_end, _) => {
                     assert!(matches!(block_chunk, BlockChunk::Range { .. }));
                     let BlockChunk::Range(range_start, range_end) = block_chunk else {
                         panic!("Unexpected shape")

@@ -22,8 +22,7 @@ impl Subchunk for BlockChunk {
                     .map(|(start, end)| Self::Range(*start, *end))
                     .collect()
             }
-            // Date range doesn't support subchunking, since we want all data in single file
-            Self::RangeForDate(_, _, _) => vec![self.clone()]
+            Self::RangeForDate(_, _, _) => panic!("Date range doesn't support subchunking"),
         }
     }
 
