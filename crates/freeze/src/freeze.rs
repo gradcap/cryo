@@ -56,7 +56,16 @@ pub async fn freeze(
     }
     let chunk_summaries: Vec<FreezeChunkSummary> =
         join_all(tasks).await.into_iter().filter_map(Result::ok).collect();
-    Ok(chunk_summaries.aggregate())
+    let freeze_summary = chunk_summaries.aggregate();
+
+    if let Some(prefix) = &sink.upload_gcs_prefix {
+        let ext = sink.format.as_str();
+        if freeze_summary.n_errored == 0 {
+            crate::upload::upload(2, prefix, ext, &sink.output_dir).await?;
+        }
+    }
+
+    Ok(freeze_summary)
 }
 
 fn cluster_datatypes(dts: Vec<&Datatype>) -> (Vec<Datatype>, Vec<MultiDatatype>) {
