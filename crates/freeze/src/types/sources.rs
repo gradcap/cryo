@@ -6,6 +6,7 @@ use governor::{
     middleware::NoOpMiddleware,
     state::{direct::NotKeyed, InMemoryState},
 };
+use serde::{Deserialize, Serialize};
 use tokio::sync::{AcquireError, Semaphore, SemaphorePermit};
 
 use crate::CollectError;
@@ -34,6 +35,29 @@ pub struct Fetcher<P> {
     pub semaphore: Option<Semaphore>,
     /// rate limiter for controlling request rate
     pub rate_limiter: Option<RateLimiter>,
+}
+
+/// Transaction receipt with local parse time
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GradTransaction {
+    /// Wrapped transaction
+    #[serde(flatten)]
+    pub inner: Transaction,
+    /// Time when transaction appeared on the node for the first time
+    pub local_parse_time_ns: U64,
+}
+
+/// Receipt of an executed transaction with custom gradcap fields: local parse time when it appeared
+/// on the node
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GradTransactionReceipt {
+    /// Wrapped receipt
+    #[serde(flatten)]
+    pub inner: TransactionReceipt,
+    /// Time when transaction appeared on the node for the first time
+    pub local_parse_time_ns: U64,
 }
 
 type Result<T> = ::core::result::Result<T, CollectError>;
@@ -81,9 +105,37 @@ impl<P: JsonRpcClient> Fetcher<P> {
     }
 
     /// Gets the block at `block_num` (transaction hashes only)
-    pub async fn get_block(&self, block_num: u64) -> Result<Option<Block<TxHash>>> {
+    pub async fn get_block(&self, block_num: impl Into<BlockId>) -> Result<Option<Block<TxHash>>> {
         let _permit = self.permit_request().await;
-        Self::map_err(self.provider.get_block(block_num).await)
+        Self::map_err(self.provider.get_block(block_num.into()).await)
+    }
+
+    /// Gets the block at `block_num` (full transactions included) using gradcap API endpoint with
+    /// extra payload
+    pub async fn grad_get_block_with_txs(
+        &self,
+        block_num: u64,
+    ) -> Result<Option<Block<GradTransaction>>> {
+        let _permit = self.permit_request().await;
+
+        let block_num = serde_json::to_value(BlockNumber::from(block_num)).unwrap();
+        println!("fetching block {}", block_num);
+        Self::map_err(
+            self.provider
+                .request("gradcap_getBlockByNumber", [block_num.clone(), true.into()])
+                .await,
+        )
+    }
+
+    /// Returns all receipts for a block using gradcap API endpoint with extra payload.
+    pub async fn grad_get_block_receipts(
+        &self,
+        block_num: u64,
+    ) -> Result<Vec<GradTransactionReceipt>> {
+        let _permit = self.permit_request().await;
+        let block_num = serde_json::to_value(BlockNumber::from(block_num)).unwrap();
+        println!("fetching receipts for block {}", block_num);
+        Self::map_err(self.provider.request("gradcap_getBlockReceipts", [block_num]).await)
     }
 
     /// Gets the block at `block_num` (full transactions included)
@@ -217,3 +269,114 @@ impl<P: JsonRpcClient> Fetcher<P> {
 //         }
 //     }
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_grad_transaction_receipt() {
+        let res: GradTransactionReceipt = serde_json::from_str(r#"{
+            "transactionHash": "0xa3ece39ae137617669c6933b7578b94e705e765683f260fcfe30eaa41932610f",
+            "blockHash": "0xf6084155ff2022773b22df3217d16e9df53cbc42689b27ca4789e06b6339beb2",
+            "blockNumber": "0x52a975",
+            "contractAddress": null,
+            "cumulativeGasUsed": "0x797db0",
+            "from": "0xd907941c8b3b966546fc408b8c942eb10a4f98df",
+            "gasUsed": "0x1308c",
+            "logs": [
+                {
+                    "blockHash": "0xf6084155ff2022773b22df3217d16e9df53cbc42689b27ca4789e06b6339beb2",
+                    "address": "0xd6df5935cd03a768b7b9e92637a01b25e24cb709",
+                    "logIndex": "0x119",
+                    "data": "0x0000000000000000000000000000000000000000000000000000008bb2c97000",
+                    "removed": false,
+                    "topics": [
+                        "0x8940c4b8e215f8822c5c8f0056c12652c746cbc57eedbd2a440b175971d47a77",
+                        "0x000000000000000000000000d907941c8b3b966546fc408b8c942eb10a4f98df"
+                    ],
+                    "blockNumber": "0x52a975",
+                    "transactionIndex": "0x29",
+                    "transactionHash": "0xa3ece39ae137617669c6933b7578b94e705e765683f260fcfe30eaa41932610f"
+                },
+                {
+                    "blockHash": "0xf6084155ff2022773b22df3217d16e9df53cbc42689b27ca4789e06b6339beb2",
+                    "address": "0xd6df5935cd03a768b7b9e92637a01b25e24cb709",
+                    "logIndex": "0x11a",
+                    "data": "0x0000000000000000000000000000000000000000000000000000008bb2c97000",
+                    "removed": false,
+                    "topics": [
+                        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                        "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "0x000000000000000000000000d907941c8b3b966546fc408b8c942eb10a4f98df"
+                    ],
+                    "blockNumber": "0x52a975",
+                    "transactionIndex": "0x29",
+                    "transactionHash": "0xa3ece39ae137617669c6933b7578b94e705e765683f260fcfe30eaa41932610f"
+                }
+            ],
+            "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000020000000000000000000800000000000000004010000010100000000000000000000000000000000000000000000000000040000080000000000000080000000000000000000000000000000000000000000020000000000000000000000002000000000000000000000000000000000000000000000000000020000000010000000000000000000000000000000000000000000000000000000000",
+            "root": null,
+            "status": "0x1",
+            "to": "0xd6df5935cd03a768b7b9e92637a01b25e24cb709",
+            "transactionIndex": "0x29",
+            "localParseTimeNs": "0x177a077a4bd55637"
+        }"#).unwrap();
+        assert_eq!(U64::from(1691672831870719543u64), res.local_parse_time_ns);
+    }
+
+    #[test]
+    fn decode_grad_block_with_txs() {
+        let res: Option<Block<GradTransaction>> = serde_json::from_str(r#"{
+            "baseFeePerGas":"0x342770c0",
+            "difficulty":"0x0",
+            "extraData":"0xd883010c01846765746888676f312e32302e37856c696e7578",
+            "gasLimit":"0xafa5bd",
+            "gasUsed":"0x5208",
+            "hash":"0x376f233432cc999f2ad42a60c082f08ca3c88450e325c01485df8fef5085b663",
+            "logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "miner":"0x0000000000000000000000000000000000000000",
+            "mixHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
+            "nonce":"0x0000000000000000",
+            "number":"0x1",
+            "parentHash":"0xde992fcf9cfbcb9afa748e57e9c72b155d2c6b7754565601d562220cf90af2fd",
+            "receiptsRoot":"0xf78dfb743fbd92ade140711c8bbc542b5e307f0ab7984eff35d751969fe57efa",
+            "sha3Uncles":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "size":"0x2b5",
+            "stateRoot":"0x2327c9aeed645c25f26bae1522d657be4f4b9d07e0f808287e9c1f7c4eda857e",
+            "timestamp":"0x64d61d2c",
+            "totalDifficulty":"0x0",
+            "transactions":[{
+                "blockHash":"0x376f233432cc999f2ad42a60c082f08ca3c88450e325c01485df8fef5085b663",
+                "blockNumber":"0x1",
+                "from":"0x6e7dd432a84311b6769a844f13cdb7387c65ef28",
+                "gas":"0x5208",
+                "gasPrice":"0x342770c1",
+                "maxFeePerGas":"0x77359401",
+                "maxPriorityFeePerGas":"0x1",
+                "hash":"0x8bf364a44791541c481244e4c182b53c82b852eb2db0f21e3fe0b94690af144b",
+                "input":"0x",
+                "nonce":"0x0",
+                "to":"0x6e7dd432a84311b6769a844f13cdb7387c65ef28",
+                "transactionIndex":"0x0",
+                "value":"0x2b5e3af16b1880000",
+                "type":"0x2",
+                "accessList":[],
+                "chainId":"0x539",
+                "v":"0x0",
+                "r":"0xdbc82af0d508aad60b308c7b3d64a21bcac5bf0ab32551772f8ac799e90759b5",
+                "s":"0x2af062a468a3a251ee125e459f6a2c6f4f007e959a47e681110c9be7cfe3c651",
+                "yParity":"0x0",
+                "localParseTimeNs":"0x177a5117d1b1d6ae"
+            }],
+            "transactionsRoot":"0x37c6f1297e10818fe0399993b69cb9af652d863dd4abfff39b0f481e58c8a4b4",
+            "uncles":[],
+            "withdrawals":[],
+            "withdrawalsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+        }"#).unwrap();
+        assert_eq!(
+            U64::from(1691753772775233198u64),
+            res.unwrap().transactions[0].local_parse_time_ns
+        );
+    }
+}

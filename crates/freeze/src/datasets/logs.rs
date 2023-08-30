@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use chrono::{DateTime, Utc};
 use ethers::prelude::*;
 use ethers_core::abi::{AbiEncode, EventParam, HumanReadableParser, ParamType, RawLog, Token};
 use polars::prelude::*;
@@ -37,6 +38,9 @@ impl Dataset for Logs {
             ("topic3", ColumnType::Binary),
             ("data", ColumnType::Binary),
             ("chain_id", ColumnType::UInt64),
+            ("_stream_type", ColumnType::String),
+            ("_block_time_ns", ColumnType::Int64),
+            ("_local_parse_time_ns", ColumnType::UInt64),
         ])
     }
 
@@ -170,6 +174,8 @@ async fn fetch_transaction_logs(
     }
 }
 
+const LP_FROM_BLOCK_TIME_LIM: u64 = std::time::Duration::from_secs(1000).as_nanos() as u64;
+
 #[derive(Default)]
 pub(crate) struct LogColumns {
     n_rows: usize,
@@ -184,11 +190,15 @@ pub(crate) struct LogColumns {
     topic3: Vec<Option<Vec<u8>>>,
     data: Vec<Vec<u8>>,
     event_cols: HashMap<String, Vec<Token>>,
+    block_time_ns: Vec<i64>,
+    local_parse_time_ns: Vec<u64>,
 }
 
 impl LogColumns {
     pub(crate) fn process_logs(
         &mut self,
+        block_time: &DateTime<Utc>,
+        local_parse_time_ns: u64,
         logs: Vec<Log>,
         schema: &Table,
     ) -> Result<(), CollectError> {
@@ -241,6 +251,13 @@ impl LogColumns {
                 self.transaction_hash.push(tx.as_bytes().to_vec());
                 self.transaction_index.push(ti.as_u32());
                 self.log_index.push(li.as_u32());
+                let block_t_ns = block_time.timestamp_nanos();
+                self.block_time_ns.push(block_t_ns);
+                if local_parse_time_ns > LP_FROM_BLOCK_TIME_LIM.saturating_add_signed(block_t_ns) {
+                    self.local_parse_time_ns.push(block_t_ns as u64);
+                } else {
+                    self.local_parse_time_ns.push(local_parse_time_ns);
+                }
             }
         }
 
@@ -272,6 +289,9 @@ impl LogColumns {
         with_series_binary!(cols, "topic3", self.topic3, schema);
         with_series_binary!(cols, "data", self.data, schema);
         with_series!(cols, "chain_id", vec![chain_id; self.n_rows], schema);
+        with_series!(cols, "_stream_type", vec!["log"; self.n_rows], schema);
+        with_series!(cols, "_block_time_ns", self.block_time_ns, schema);
+        with_series!(cols, "_local_parse_time_ns", self.local_parse_time_ns, schema);
 
         let decoder = schema.log_decoder.clone();
         if let Some(decoder) = decoder {
@@ -307,7 +327,7 @@ async fn logs_to_df(
     let mut columns = LogColumns::default();
     while let Some(message) = logs.recv().await {
         if let Ok(logs) = message {
-            columns.process_logs(logs, schema)?
+            columns.process_logs(&Default::default(), 0, logs, schema)?
         } else {
             return Err(CollectError::TooManyRequestsError)
         }

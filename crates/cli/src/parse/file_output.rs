@@ -23,7 +23,7 @@ pub(crate) fn parse_file_output(args: &Args, source: &Source) -> Result<FileOutp
     let row_group_size = parse_row_group_size(
         args.row_group_size,
         args.n_row_groups,
-        Some(args.chunk_size as usize),
+        if args.chunk_size < u64::MAX { Some(args.chunk_size as usize) } else { None },
     );
 
     let format = parse_output_format(args)?;

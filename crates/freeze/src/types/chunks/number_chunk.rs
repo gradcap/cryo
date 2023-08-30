@@ -10,6 +10,9 @@ pub enum NumberChunk {
 
     /// Range of block numbers
     Range(u64, u64),
+
+    /// Range of block numbers known to be within UTC date
+    RangeForDate(u64, u64, chrono::NaiveDate),
 }
 
 impl ChunkData for NumberChunk {
@@ -21,22 +24,29 @@ impl ChunkData for NumberChunk {
 
     fn size(&self) -> u64 {
         match self {
-            NumberChunk::Numbers(numbers) => numbers.len() as u64,
-            NumberChunk::Range(start, end) => end - start + 1,
+            Self::Numbers(numbers) => numbers.len() as u64,
+            Self::Range(start, end) | Self::RangeForDate(start, end, _) => end - start + 1,
         }
     }
 
     fn min_value(&self) -> Option<Self::Inner> {
         match self {
-            NumberChunk::Numbers(numbers) => numbers.iter().min().cloned(),
-            NumberChunk::Range(start, _) => Some(*start),
+            Self::Numbers(numbers) => numbers.iter().min().cloned(),
+            Self::Range(start, _) | Self::RangeForDate(start, _, _) => Some(*start),
         }
     }
 
     fn max_value(&self) -> Option<Self::Inner> {
         match self {
-            NumberChunk::Numbers(numbers) => numbers.iter().max().cloned(),
-            NumberChunk::Range(_, end) => Some(*end),
+            Self::Numbers(numbers) => numbers.iter().max().cloned(),
+            Self::Range(_, end) | Self::RangeForDate(_, end, _) => Some(*end),
+        }
+    }
+
+    fn date(&self) -> Option<&chrono::NaiveDate> {
+        match self {
+            Self::RangeForDate(_, _, date) => Some(date),
+            Self::Numbers(_) | Self::Range(_, _) => None,
         }
     }
 }
@@ -46,21 +56,23 @@ impl NumberChunk {
     pub fn numbers(&self) -> Vec<u64> {
         match self {
             NumberChunk::Numbers(numbers) => numbers.to_vec(),
-            NumberChunk::Range(start, end) => (*start..=*end).collect(),
+            NumberChunk::Range(start, end) | NumberChunk::RangeForDate(start, end, _) => {
+                (*start..=*end).collect()
+            }
         }
     }
 
     /// convert block range to a list of Filters for get_logs()
     pub fn to_log_filter_options(&self, log_request_size: &u64) -> Vec<FilterBlockOption> {
         match self {
-            NumberChunk::Numbers(block_numbers) => block_numbers
+            Self::Numbers(block_numbers) => block_numbers
                 .iter()
                 .map(|block| FilterBlockOption::Range {
                     from_block: Some((*block).into()),
                     to_block: Some((*block).into()),
                 })
                 .collect(),
-            NumberChunk::Range(start_block, end_block) => {
+            Self::Range(start_block, end_block) | Self::RangeForDate(start_block, end_block, _) => {
                 let chunks = range_to_chunks(start_block, &(end_block + 1), log_request_size);
                 chunks
                     .iter()
@@ -74,14 +86,23 @@ impl NumberChunk {
     }
 
     /// align boundaries of chunk to clean boundaries
-    pub fn align(self, chunk_size: u64) -> Option<NumberChunk> {
+    pub fn align(self, chunk_size: u64) -> Option<Self> {
         match self {
-            NumberChunk::Numbers(numbers) => Some(NumberChunk::Numbers(numbers)),
-            NumberChunk::Range(start, end) => {
+            Self::Numbers(numbers) => Some(Self::Numbers(numbers)),
+            Self::Range(start, end) => {
                 let start = ((start + chunk_size - 1) / chunk_size) * chunk_size;
                 let end = (end / chunk_size) * chunk_size;
                 if end > start {
-                    Some(NumberChunk::Range(start, end))
+                    Some(Self::Range(start, end))
+                } else {
+                    None
+                }
+            }
+            Self::RangeForDate(start, end, date) => {
+                let start = ((start + chunk_size - 1) / chunk_size) * chunk_size;
+                let end = (end / chunk_size) * chunk_size;
+                if end > start {
+                    Some(Self::RangeForDate(start, end, date))
                 } else {
                     None
                 }

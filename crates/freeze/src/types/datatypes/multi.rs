@@ -12,6 +12,8 @@ use crate::types::{
 pub struct BlocksAndTransactions;
 /// State Diff datasets
 pub struct StateDiffs;
+/// Blocks, Transactions and Logs datasets
+pub struct BlocksWithTxsAndReceipts;
 
 /// enum of possible sets of datatypes that cryo can collect
 /// used when multiple datatypes are collected together
@@ -22,19 +24,23 @@ pub enum MultiDatatype {
 
     /// balance diffs, code diffs, nonce diffs, and storage diffs
     StateDiffs,
+
+    /// blocks, transactions and logs
+    BlocksWithTxsAndReceipts,
 }
 
 impl MultiDatatype {
     /// return all variants of multi datatype
-    pub fn variants() -> Vec<MultiDatatype> {
-        vec![MultiDatatype::BlocksAndTransactions, MultiDatatype::StateDiffs]
+    pub fn variants() -> Vec<Self> {
+        vec![Self::BlocksAndTransactions, Self::StateDiffs, Self::BlocksWithTxsAndReceipts]
     }
 
     /// return MultiDataset corresponding to MultiDatatype
     pub fn multi_dataset(&self) -> Box<dyn MultiDataset> {
         match self {
-            MultiDatatype::BlocksAndTransactions => Box::new(BlocksAndTransactions),
-            MultiDatatype::StateDiffs => Box::new(StateDiffs),
+            Self::BlocksAndTransactions => Box::new(BlocksAndTransactions),
+            Self::StateDiffs => Box::new(StateDiffs),
+            Self::BlocksWithTxsAndReceipts => Box::new(BlocksWithTxsAndReceipts),
         }
     }
 }

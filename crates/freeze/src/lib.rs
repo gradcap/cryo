@@ -11,6 +11,7 @@ mod collect;
 mod datasets;
 mod freeze;
 mod types;
+pub mod util;
 
 pub use collect::{collect, collect_multiple};
 pub use datasets::LogDecoder;

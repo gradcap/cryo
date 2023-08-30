@@ -1,6 +1,7 @@
 mod balance_diffs;
 mod blocks;
 mod blocks_and_transactions;
+mod blocks_with_receipts;
 mod code_diffs;
 mod contracts;
 mod logs;

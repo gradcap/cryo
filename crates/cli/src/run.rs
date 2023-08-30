@@ -8,6 +8,7 @@ use indicatif::ProgressBar;
 pub async fn run(args: args::Args) -> Result<Option<FreezeSummary>, FreezeError> {
     // parse inputs
     let t_start = SystemTime::now();
+    let args = parse::normalize_args(args);
     let (query, source, sink) = match parse::parse_opts(&args).await {
         Ok(opts) => opts,
         Err(e) => return Err(e.into()),

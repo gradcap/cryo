@@ -870,6 +870,7 @@ dependencies = [
  "serde_json",
  "thousands",
  "tokio",
+ "toml",
 ]
 
 [[package]]
@@ -877,6 +878,7 @@ name = "cryo_freeze"
 version = "0.2.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "ethers",
  "ethers-core",
  "futures",
