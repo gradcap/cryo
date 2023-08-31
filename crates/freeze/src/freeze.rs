@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    sync::Arc,
+};
 
 use futures::future::join_all;
 use indicatif::ProgressBar;
@@ -17,7 +21,7 @@ pub async fn freeze(
     bar: Arc<ProgressBar>,
 ) -> Result<FreezeSummary, FreezeError> {
     // freeze chunks concurrently
-    let (datatypes, multi_datatypes) = cluster_datatypes(query.schemas.keys().collect());
+    let (datatypes, multi_datatypes) = cluster_datatypes(query.schemas.keys().copied().collect());
     let sem = Arc::new(Semaphore::new(source.max_concurrent_chunks as usize));
     let query = Arc::new(query.clone());
     let source = Arc::new(source.clone());
@@ -59,16 +63,18 @@ pub async fn freeze(
     Ok(chunk_summaries.aggregate())
 }
 
-fn cluster_datatypes(dts: Vec<&Datatype>) -> (Vec<Datatype>, Vec<MultiDatatype>) {
-    let mdts: Vec<MultiDatatype> = MultiDatatype::variants()
-        .iter()
-        .filter(|mdt| mdt.multi_dataset().datatypes().iter().all(|x| dts.contains(&x)))
-        .cloned()
-        .collect();
-    let mdt_dts: Vec<Datatype> =
-        mdts.iter().flat_map(|mdt| mdt.multi_dataset().datatypes()).collect();
-    let other_dts = dts.iter().filter(|dt| !mdt_dts.contains(dt)).map(|x| **x).collect();
-    (other_dts, mdts)
+fn cluster_datatypes(mut dts: HashSet<Datatype>) -> (HashSet<Datatype>, Vec<MultiDatatype>) {
+    let datatypes = |mdt: &MultiDatatype| mdt.multi_dataset().datatypes();
+    let mut mdts = MultiDatatype::variants();
+    mdts.retain(|mdt| datatypes(mdt).is_subset(&dts));
+    mdts.sort_by_key(|mdt| !datatypes(mdt).len());
+    mdts.retain(|mdt| {
+        let remaining: HashSet<_> = dts.difference(&datatypes(mdt)).copied().collect();
+        let has_overlap = remaining.len() != dts.len();
+        dts = remaining;
+        has_overlap
+    });
+    (dts, mdts)
 }
 
 async fn freeze_datatype_chunk(
@@ -168,4 +174,17 @@ async fn freeze_multi_datatype_chunk(
 
     bar.inc(1);
     FreezeChunkSummary::success(paths)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cluster_datatypes() {
+        let dts = [Datatype::Blocks, Datatype::Logs, Datatype::Transactions];
+        let (dts, mdts) = cluster_datatypes(dts.into());
+        assert_eq!(HashSet::from_iter([Datatype::Logs]), dts);
+        assert_eq!(vec![MultiDatatype::BlocksAndTransactions], mdts);
+    }
 }
