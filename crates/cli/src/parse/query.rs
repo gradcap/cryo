@@ -11,7 +11,7 @@ use cryo_freeze::{
     Table,
 };
 
-use super::{blocks, file_output, transactions};
+use super::{blocks, dates_map, file_output, transactions};
 use crate::args::Args;
 use cryo_freeze::U256Type;
 
@@ -19,12 +19,15 @@ pub(crate) async fn parse_query<P: JsonRpcClient>(
     args: &Args,
     fetcher: Arc<Fetcher<P>>,
 ) -> Result<MultiQuery, ParseError> {
-    let chunks = match (&args.blocks, &args.txs) {
-        (Some(_), None) => blocks::parse_blocks(args, fetcher).await?,
-        (None, Some(txs)) => transactions::parse_transactions(txs)?,
-        (None, None) => blocks::get_default_block_chunks(args, fetcher).await?,
-        (Some(_), Some(_)) => {
-            return Err(ParseError::ParseError("specify only one of --blocks or --txs".to_string()))
+    let chunks = match (&args.blocks, &args.txs, &args.date) {
+        (Some(_), None, None) => blocks::parse_blocks(args, fetcher).await?,
+        (None, Some(txs), None) => transactions::parse_transactions(txs)?,
+        (None, None, Some(date)) => dates_map::parse_date(date, fetcher).await?,
+        (None, None, None) => blocks::get_default_block_chunks(args, fetcher).await?,
+        (Some(_), Some(_), _) | (Some(_), _, Some(_)) | (_, Some(_), Some(_)) => {
+            return Err(ParseError::ParseError(
+                "specify only one of --blocks, --date or --txs".to_string(),
+            ))
         }
     };
 

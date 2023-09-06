@@ -41,7 +41,7 @@ pub(crate) fn write_report(
     t_start: SystemTime,
 ) -> Result<String, FreezeError> {
     // determine version
-    let cryo_version = format!("{}__{}", env!("CARGO_PKG_VERSION"), env!("GIT_DESCRIPTION"));
+    let cryo_version = format!("{}__git", env!("CARGO_PKG_VERSION"));
     let report = FreezeReport {
         cryo_version,
         cli_command: std::env::args().collect(),

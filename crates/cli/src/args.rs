@@ -1,5 +1,7 @@
+use chrono::NaiveDate;
 use clap_cryo::Parser;
 use color_print::cstr;
+use cryo_freeze::util;
 use serde::{Deserialize, Serialize};
 
 /// Command line arguments
@@ -39,8 +41,15 @@ pub struct Args {
     )]
     pub reorg_buffer: u64,
 
-    /// Columns to include alongside the defaults,
-    /// use `all` to include all available columns
+    /// Calculates range of blocks to match their UTC date with specified date.
+    /// To optimize repeated runs the dates->blocks mapping calculation is cached on disk.
+    #[arg(long, value_parser = util::parse_date, help_heading = "Content Options", verbatim_doc_comment)]
+    pub date: Option<NaiveDate>,
+
+    /// Columns to include alongside the default output,
+    /// use `all` to include all available columns.
+    /// Unknown columns are ignored per dataset, so a superset of columns can be specified for
+    /// multiset download.
     #[arg(short, long, value_name="COLS", num_args(0..), verbatim_doc_comment, help_heading="Content Options")]
     pub include_columns: Option<Vec<String>>,
 

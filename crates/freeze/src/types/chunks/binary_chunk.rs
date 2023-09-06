@@ -43,4 +43,8 @@ impl ChunkData for BinaryChunk {
             BinaryChunk::Range(_, end) => Some(end.clone()),
         }
     }
+
+    fn date(&self) -> Option<&chrono::NaiveDate> {
+        todo!()
+    }
 }

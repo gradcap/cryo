@@ -943,6 +943,7 @@ dependencies = [
  "serde_json",
  "thousands",
  "tokio",
+ "toml",
 ]
 
 [[package]]
@@ -952,6 +953,7 @@ dependencies = [
  "async-channel",
  "async-trait",
  "backoff",
+ "chrono",
  "cloud-storage",
  "ethers",
  "ethers-core",

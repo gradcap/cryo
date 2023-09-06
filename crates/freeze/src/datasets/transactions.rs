@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use chrono::{DateTime, Utc};
 use ethers::prelude::*;
 use polars::prelude::*;
 use tokio::{sync::mpsc, task};
@@ -7,6 +8,7 @@ use tokio::{sync::mpsc, task};
 use super::{blocks, blocks::ProcessTransactions, blocks_and_transactions};
 use crate::{
     dataframes::SortableDataFrame,
+    sources::GradTransaction,
     types::{
         conversions::{ToVecHex, ToVecU8},
         BlockChunk, CollectError, ColumnEncoding, ColumnType, Dataset, Datatype, RowFilter, Source,
@@ -42,6 +44,9 @@ impl Dataset for Transactions {
             ("max_priority_fee_per_gas", ColumnType::UInt64),
             ("max_fee_per_gas", ColumnType::UInt64),
             ("chain_id", ColumnType::UInt64),
+            ("_stream_type", ColumnType::String),
+            ("_block_time_ns", ColumnType::Int64),
+            ("_local_parse_time_ns", ColumnType::UInt64),
         ])
     }
 
@@ -106,7 +111,6 @@ async fn fetch_transactions(
     include_gas_used: bool,
 ) -> mpsc::Receiver<Result<(Transaction, Option<u32>), CollectError>> {
     let (tx, rx) = mpsc::channel(1);
-
     match transaction_chunk {
         TransactionChunk::Values(tx_hashes) => {
             for tx_hash in tx_hashes.iter() {
@@ -162,10 +166,14 @@ async fn fetch_transactions(
     }
 }
 
+const LP_FROM_BLOCK_TIME_LIM: u64 = std::time::Duration::from_secs(1000).as_nanos() as u64;
+
 #[derive(Default)]
 pub(crate) struct TransactionColumns {
     n_rows: usize,
     block_number: Vec<Option<u64>>,
+    block_time_ns: Vec<i64>,
+    local_parse_time_ns: Vec<u64>,
     transaction_index: Vec<Option<u64>>,
     transaction_hash: Vec<Vec<u8>>,
     nonce: Vec<u64>,
@@ -203,6 +211,9 @@ impl TransactionColumns {
         with_series!(cols, "max_priority_fee_per_gas", self.max_priority_fee_per_gas, schema);
         with_series!(cols, "max_fee_per_gas", self.max_fee_per_gas, schema);
         with_series!(cols, "chain_id", vec![chain_id; self.n_rows], schema);
+        with_series!(cols, "_stream_type", vec!["tx"; self.n_rows], schema);
+        with_series!(cols, "_block_time_ns", self.block_time_ns, schema);
+        with_series!(cols, "_local_parse_time_ns", self.local_parse_time_ns, schema);
 
         DataFrame::new(cols).map_err(CollectError::PolarsError).sort_by_schema(schema)
     }
@@ -267,6 +278,29 @@ impl TransactionColumns {
         }
         if schema.has_column("max_fee_per_gas") {
             self.max_fee_per_gas.push(tx.max_fee_per_gas.map(|value| value.as_u64()));
+        }
+    }
+
+    pub(crate) fn process_grad_transaction(
+        &mut self,
+        tx: &GradTransaction,
+        block_time: &DateTime<Utc>,
+        schema: &Table,
+        gas_used: Option<u32>,
+    ) {
+        self.process_transaction(&tx.inner, schema, gas_used);
+        let block_t_ns = block_time.timestamp_nanos();
+        if schema.has_column("_block_time_ns") {
+            self.block_time_ns.push(block_t_ns);
+        }
+        if schema.has_column("_local_parse_time_ns") {
+            if tx.local_parse_time_ns.as_u64() >
+                LP_FROM_BLOCK_TIME_LIM.saturating_add_signed(block_t_ns)
+            {
+                self.local_parse_time_ns.push(block_t_ns as u64);
+            } else {
+                self.local_parse_time_ns.push(tx.local_parse_time_ns.as_u64());
+            }
         }
     }
 }

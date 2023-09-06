@@ -46,6 +46,7 @@ impl Dataset for Blocks {
             ("base_fee_per_gas", ColumnType::UInt64),
             ("chain_id", ColumnType::UInt64),
             // not including: transactions, seal_fields, epoch_snark_data, randomness
+            ("_stream_type", ColumnType::String),
         ])
     }
 
@@ -220,7 +221,7 @@ pub(crate) async fn blocks_to_dfs<TX: ProcessTransactions>(
 }
 
 #[derive(Default)]
-struct BlockColumns {
+pub(crate) struct BlockColumns {
     n_rows: usize,
     hash: Vec<Vec<u8>>,
     parent_hash: Vec<Vec<u8>>,
@@ -239,7 +240,7 @@ struct BlockColumns {
 }
 
 impl BlockColumns {
-    fn process_block<TX>(&mut self, block: &Block<TX>, schema: &Table) {
+    pub(crate) fn process_block<TX>(&mut self, block: &Block<TX>, schema: &Table) {
         self.n_rows += 1;
         if schema.has_column("hash") {
             match block.hash {
@@ -294,7 +295,11 @@ impl BlockColumns {
         }
     }
 
-    fn create_df(self, schema: &Table, chain_id: u64) -> Result<DataFrame, CollectError> {
+    pub(crate) fn create_df(
+        self,
+        schema: &Table,
+        chain_id: u64,
+    ) -> Result<DataFrame, CollectError> {
         let mut cols = Vec::with_capacity(schema.columns().len());
         with_series_binary!(cols, "hash", self.hash, schema);
         with_series_binary!(cols, "parent_hash", self.parent_hash, schema);
@@ -311,6 +316,7 @@ impl BlockColumns {
         with_series!(cols, "size", self.size, schema);
         with_series!(cols, "base_fee_per_gas", self.base_fee_per_gas, schema);
         with_series!(cols, "chain_id", vec![chain_id; self.n_rows], schema);
+        with_series!(cols, "_stream_type", &["block"].repeat(self.n_rows), schema);
 
         DataFrame::new(cols).map_err(CollectError::PolarsError).sort_by_schema(schema)
     }

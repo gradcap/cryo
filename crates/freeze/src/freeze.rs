@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    sync::Arc,
+};
 
 use futures::future::join_all;
 use indicatif::ProgressBar;
@@ -24,6 +28,7 @@ pub async fn freeze(
     let sink = Arc::new(sink.clone());
     let mut tasks: Vec<_> = vec![];
     bar.inc(0);
+    println!("Collecting {:?} {:?}", datatypes, multi_datatypes);
     for (chunk, chunk_label) in query.chunks.iter() {
         // datatypes
         for datatype in &datatypes {
@@ -68,16 +73,16 @@ pub async fn freeze(
     Ok(freeze_summary)
 }
 
-fn cluster_datatypes(dts: Vec<&Datatype>) -> (Vec<Datatype>, Vec<MultiDatatype>) {
-    let mdts: Vec<MultiDatatype> = MultiDatatype::variants()
-        .iter()
-        .filter(|mdt| mdt.multi_dataset().datatypes().iter().all(|x| dts.contains(&x)))
-        .cloned()
+fn cluster_datatypes(dts: Vec<&Datatype>) -> (HashSet<Datatype>, Vec<MultiDatatype>) {
+    let mut dts = HashSet::<Datatype>::from_iter(dts.into_iter().cloned());
+    let mut mdts: Vec<MultiDatatype> = MultiDatatype::variants()
+        .into_iter()
+        .filter(|mdt| mdt.multi_dataset().datatypes().iter().all(|x| dts.contains(x)))
         .collect();
-    let mdt_dts: Vec<Datatype> =
-        mdts.iter().flat_map(|mdt| mdt.multi_dataset().datatypes()).collect();
-    let other_dts = dts.iter().filter(|dt| !mdt_dts.contains(dt)).map(|x| **x).collect();
-    (other_dts, mdts)
+    mdts.sort_by_key(|mdt| mdt.multi_dataset().datatypes().len());
+    mdts.reverse();
+    mdts.retain(|mdt| mdt.multi_dataset().datatypes().iter().all(|x| dts.remove(x)));
+    (dts, mdts)
 }
 
 async fn freeze_datatype_chunk(
@@ -122,7 +127,8 @@ async fn freeze_datatype_chunk(
     };
 
     // write data
-    if let Err(_e) = dataframes::df_to_file(&mut df, &path, &sink) {
+    if let Err(e) = dataframes::df_to_file(&mut df, &path, &sink) {
+        println!("failed to write chunk: {:?}", e);
         return FreezeChunkSummary::error(paths)
     }
 

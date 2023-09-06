@@ -94,6 +94,7 @@ pub fn _collect(
         datatype: vec![datatype],
         blocks,
         txs,
+        date: None,
         align,
         reorg_buffer,
         include_columns,
