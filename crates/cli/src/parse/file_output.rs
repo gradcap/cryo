@@ -28,6 +28,7 @@ pub(crate) fn parse_file_output(args: &Args, source: &Source) -> Result<FileOutp
 
     let format = parse_output_format(args)?;
     let file_prefix = parse_network_name(args, source.chain_id);
+    let upload_gcs_prefix = args.upload_gcs_prefix.clone();
 
     let output = FileOutput {
         output_dir,
@@ -38,6 +39,7 @@ pub(crate) fn parse_file_output(args: &Args, source: &Source) -> Result<FileOutp
         suffix: file_suffix.clone(),
         parquet_compression,
         row_group_size,
+        upload_gcs_prefix,
     };
 
     Ok(output)

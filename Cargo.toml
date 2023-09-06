@@ -16,13 +16,16 @@ exclude = [".github/"]
 
 [workspace.dependencies]
 anstyle = "1.0.1"
+async-channel = "1"
 async-trait = "0.1.68"
+backoff = { version = "0.4", features = ["futures", "tokio"] }
 chrono = { version = "0.4.26", features = ["serde"] }
 clap_cryo = { version = "4.3.21-cryo", features = [
     "derive",
     "color",
     "unstable-styles",
 ] }
+cloud-storage = "0.11"
 colored = "2.0.0"
 color-print = "0.3.4"
 ethers = { version = "2.0.8", features = ["rustls", "ws", "ipc"] }
@@ -52,6 +55,8 @@ serde_json = "1.0.104"
 thiserror = "1.0.40"
 thousands = "0.2.0"
 tokio = { version = "1.29.0", features = ["macros", "rt-multi-thread", "sync"] }
+tokio-util = "0.7"
+toml = "0.7"
 
 [profile.dev]
 incremental = true

@@ -122,6 +122,10 @@ pub struct Args {
     #[arg(long, help_heading = "Output Options")]
     pub json: bool,
 
+    /// Upload generated files to the GCS filesystem using given prefix
+    #[arg[long, help_heading = "Output Options"]]
+    pub upload_gcs_prefix: Option<String>,
+
     /// Number of rows per row group in parquet file
     #[arg(long, value_name = "GROUP_SIZE", help_heading = "Output Options")]
     pub row_group_size: Option<usize>,

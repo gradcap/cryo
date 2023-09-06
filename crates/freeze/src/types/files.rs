@@ -19,6 +19,8 @@ pub struct FileOutput {
     pub parquet_statistics: bool,
     /// Parquet compression options
     pub parquet_compression: ParquetCompression,
+    /// GCS prefix to upload files to
+    pub upload_gcs_prefix: Option<String>,
 }
 
 /// File format
